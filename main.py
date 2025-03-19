@@ -209,12 +209,17 @@ with tab3:
             st.success("✅ Conexión al servidor SMTP establecida")
             
             # Limpiar el DataFrame antes de enviar los correos
-            df = fc.limpiar_correos(df, col_correo)
+            df = fc.limpiar_correos(st.session_state.df, col_correo)
+            
+            # Obtener el primer nombre de la columna de nombres
+            df = fc.obtener_primer_nombre(df, col_nombre)
             
             # Enviar correos a cada destinatario
             enviados = 0
             errores = 0
             total = len(df)
+            # Lista para almacenar correos no enviados
+            correos_no_enviados = []
             
             for index, row in df.iterrows():
                 nombre = row.get(col_nombre, "Estimado/a")
@@ -250,7 +255,7 @@ with tab3:
                     errores += 1
                 
                 # Actualizar la barra de progreso
-                progress_bar.progress((index + 1) / total)
+                progress_bar.progress(min((index + 1) / total, 1.0))
             
             # Cerrar la conexión
             server.quit()
@@ -261,13 +266,33 @@ with tab3:
             - Total de correos enviados: {enviados}
             - Total de errores: {errores}
             """)
+
+            # Mostrar correos no enviados
+            if correos_no_enviados:
+                st.warning("Correos no enviados:")
+                st.write(correos_no_enviados)
+
+                # Guardar correos no enviados en un archivo y permitir descarga
+                with open("correos_no_enviados.txt", "w") as file:
+                    for correo in correos_no_enviados:
+                        file.write(correo + "\n")
+
+                with open("correos_no_enviados.txt", "r") as file:
+                    st.download_button(
+                        label="Descargar correos no enviados",
+                        data=file,
+                        file_name="correos_no_enviados.txt",
+                        mime="text/plain"
+                    )
+            else:
+                st.success("Todos los correos fueron enviados correctamente.")
             
         except Exception as e:
             st.error(f"Error general: {str(e)}")
     
     if st.button("Enviar Correos", type="primary"):
-        if 'uploaded_excel' in locals() and uploaded_excel is not None:
-            if 'html_content' in locals() and html_content:
+        if 'df' in st.session_state and (df is not None):
+            if 'html_content' in st.session_state and html_content:
                 with st.spinner("Enviando correos..."):
                     enviar_correos()
             else:
