@@ -5,6 +5,7 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import os
+import time
 #from dotenv import load_dotenv
 import tempfile
 #streamlit run main.py
@@ -256,6 +257,11 @@ with tab3:
                 
                 # Actualizar la barra de progreso
                 progress_bar.progress(min((index + 1) / total, 1.0))
+
+                # Hacer una pausa cada 40 correos enviados para evitar bloqueos
+                if enviados % 40 == 0:
+                    status_text.text(f"Pausa de 60 segundos después de enviar {enviados} correos...")
+                    time.sleep(60)
             
             # Cerrar la conexión
             server.quit()
