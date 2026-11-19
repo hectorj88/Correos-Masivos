@@ -1,0 +1,49 @@
+# Traefik v3 como proxy inverso con HTTPS automático (Let's Encrypt)
+# Uso:  docker compose up -d   (crea la red "proxy" que usarán tus otros servicios)
+
+services:
+  traefik:
+    #image: traefik:v3.6          # usa una versión reciente (compatible con Docker 29+)
+    image: dhi.io/traefik:3.7.19-alpine
+    container_name: traefik
+    restart: unless-stopped
+    user: "0:0"
+    security_opt:
+      - no-new-privileges:true
+    command:
+      # Proveedor Docker: solo expone contenedores con la etiqueta traefik.enable=true
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=proxy
+
+      # Puntos de entrada: HTTP redirige siempre a HTTPS
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+
+      # Certificados Let's Encrypt (desafío HTTP por el puerto 80)
+      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+
+      # Seguridad y ruido: sin dashboard público, sin telemetría
+      - --api.dashboard=false
+      - --global.checknewversion=false
+      - --global.sendanonymoususage=false
+      - --log.level=INFO
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./acme/acme.json:/letsencrypt/acme.json
+    networks:
+      - proxy
+
+networks:
+  proxy:
+    name: proxy
+
+volumes:
+  traefik_letsencrypt:

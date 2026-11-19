@@ -1,7 +1,10 @@
+from dotenv import load_dotenv
+load_dotenv()  # debe ir ANTES de importar sender_helper
 import streamlit as st
 import pandas as pd
 import funciones as fc
 import smtplib
+from backend.scripts.sender_helper import build_pixel_url, register_campaign
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import os
@@ -9,6 +12,7 @@ import time
 #from dotenv import load_dotenv
 import tempfile
 #streamlit run main.py
+#streamlit run main.py --server.runOnSave=true
 #pip freeze > requirements.txt
 # Configuración de la página
 st.set_page_config(
@@ -79,6 +83,7 @@ with tab1:
     if uploaded_excel is not None:
         try:
             df = pd.read_excel(uploaded_excel)
+            st.session_state.df = df
             
             st.success(f"✅ Archivo cargado correctamente con {len(df)} registros")
             st.dataframe(df, height=200)
@@ -89,21 +94,26 @@ with tab1:
             col_correo = st.selectbox("Columna para Correo", options=df.columns.tolist())            
             
         except Exception as e:
+            st.session_state.pop("df", None)
             st.error(f"Error al cargar el archivo: {str(e)}")
+    else:
+        st.session_state.pop("df", None)
 
 with tab2:
     st.header("Contenido del Correo")
     
     # Configuración del asunto y preheader
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     with col1:
         asunto = st.text_input(
             "Asunto del correo", 
-            value=f"¡Regístrate al encuentro sobre inclusión y tecnología en la educación infantil!"
+            value="{{NOMBRE}} ¿y si automatizamos lo que hoy les quita horas?"
         )
     with col2:
-        preheader = st.text_input("Preheader", value="Asegura tu cupo GRATIS ahora")
-    
+        preheader = st.text_input("Preheader", value="Te cuento en 2 minutos qué podríamos mejorar en {{NOMBRE}}.")
+    with col3:
+        CAMPAIGN_ID = st.text_input("Campaña", value="pymes-nov-2026")
+
     # Opciones para el cuerpo HTML
     option = st.radio("¿Cómo quieres definir el cuerpo del correo?", ["Subir archivo HTML", "Editar directamente"])
     
@@ -164,10 +174,14 @@ with tab3:
                         mensaje_prueba["From"] = f"{nombre_remitente} <{remitente}>"
                         mensaje_prueba["To"] = correo_prueba
                         mensaje_prueba["Subject"] = asunto.replace("{{NOMBRE}}", str(col_nombre))
-                        mensaje_prueba["X-Preheader"] = preheader
+                        mensaje_prueba["X-Preheader"] = preheader.replace("{{NOMBRE}}", str(col_nombre))
                         
                         # Personalizar el contenido HTML para la prueba
                         contenido_prueba = st.session_state.html_content.replace("{{NOMBRE}}", "Usuario de Prueba")
+                        contenido_prueba = contenido_prueba.replace(
+                            "{{tracking_pixel_url}}",
+                            build_pixel_url(f"{CAMPAIGN_ID}-prueba", correo_prueba)
+                        )
                         
                         # Adjuntar el cuerpo HTML
                         mensaje_prueba.attach(MIMEText(contenido_prueba, "html"))
@@ -203,8 +217,8 @@ with tab3:
         
         try:
             # Conectar al servidor SMTP
-            smtp_server = 'smtp.yandex.com'
-            smtp_port = 465
+            smtp_server = smtp_config["server"]
+            smtp_port = smtp_config["port"]
             server = smtplib.SMTP_SSL(smtp_server, smtp_port)
             server.login(remitente, password)
             st.success("✅ Conexión al servidor SMTP establecida")
@@ -237,10 +251,15 @@ with tab3:
                 mensaje["From"] = f"{nombre_remitente} <{remitente}>"
                 mensaje["To"] = correo
                 mensaje["Subject"] = asunto.replace("{{NOMBRE}}", str(nombre))
-                mensaje["X-Preheader"] = preheader
+                mensaje["X-Preheader"] = preheader.replace("{{NOMBRE}}", str(nombre))
                 
                 # Personalizar el contenido HTML
-                contenido_personalizado = html_content.replace("{{NOMBRE}}", str(nombre))
+                #contenido_personalizado = html_content.replace("{{NOMBRE}}", str(nombre))
+                contenido_personalizado = (
+                    html_content
+                    .replace("{{NOMBRE}}", str(nombre))
+                    .replace("{{tracking_pixel_url}}", build_pixel_url(CAMPAIGN_ID, str(correo)))
+                )
                 
                 # Adjuntar el cuerpo HTML
                 mensaje.attach(MIMEText(contenido_personalizado, "html"))
@@ -265,6 +284,11 @@ with tab3:
             
             # Cerrar la conexión
             server.quit()
+
+            try:
+                register_campaign(CAMPAIGN_ID, CAMPAIGN_ID, enviados)
+            except Exception as e:
+                st.warning(f"⚠️ No se pudo registrar la campaña en el servidor de tracking: {e}")
             
             # Resumen final
             st.success(f"""

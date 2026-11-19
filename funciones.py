@@ -38,6 +38,6 @@ def obtener_primer_nombre(df, col_nombre):
     df[col_nombre] = df[col_nombre].str.title()
     
     # Aplicar una función lambda para dividir el nombre y tomar el primero
-    df[col_nombre] = df[col_nombre].apply(lambda x: x.split()[0] if isinstance(x, str) else x)
+    #df[col_nombre] = df[col_nombre].apply(lambda x: x.split()[0] if isinstance(x, str) else x)
     
     return df

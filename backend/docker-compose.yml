@@ -1,0 +1,28 @@
+services:
+  api:
+    build: .
+    container_name: hitech-api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # El host "postgres" resuelve por la red db_network
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - proxy        # para que Traefik lo alcance
+      - db_network   # para hablar con Postgres
+    # Sin "ports": solo Traefik lo publica.
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=proxy
+      - traefik.http.routers.hitech-api.rule=Host(`${API_DOMAIN}`)
+      - traefik.http.routers.hitech-api.entrypoints=websecure
+      - traefik.http.routers.hitech-api.tls.certresolver=letsencrypt
+      - traefik.http.services.hitech-api.loadbalancer.server.port=8000
+
+networks:
+  proxy:
+    external: true
+  db_network:
+    external: true
